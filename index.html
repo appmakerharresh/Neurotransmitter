@@ -1,641 +1,461 @@
-<!doctype html>
-<html lang="en" class="dark">
+<!DOCTYPE html>
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Neurotransmitter</title>
+<title>Neon P2P Group Chat — Persistent Session</title>
+
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+
 <style>
-  /* Basic neon terminal aesthetic, with improved UX */
-  :root{
-    --bg:#000;
-    --fg:#0ff06b;
-    --muted:#6cff6c;
-    --accent:#6be7ff;
-    --danger:#ff6b6b;
-    --glass: rgba(255,255,255,0.02);
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:'VT323',monospace}
-  .app{display:grid;grid-template-columns:320px 1fr;height:100vh;border:1px solid var(--fg)}
-  @media(max-width:820px){.app{grid-template-columns:1fr} .sidebar{display:none}}
-  .sidebar{padding:16px;border-right:1px solid var(--fg);display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg, rgba(0,0,0,0.6), transparent)}
-  .brand{font-size:20px;display:flex;justify-content:space-between;align-items:center}
-  .small{font-size:13px;color:var(--muted)}
-  input[type=text], input[type=search], textarea, select {
-    background:transparent;border:1px solid var(--fg);color:var(--fg);padding:8px;border-radius:6px;font-family:inherit;
-  }
-  button{background:transparent;border:1px solid var(--fg);color:var(--fg);padding:8px 10px;border-radius:8px;cursor:pointer}
-  .muted{color:var(--muted)}
-  .sidebar .section{background:var(--glass);padding:10px;border-radius:8px;display:flex;flex-direction:column;gap:8px}
-  .chat{display:flex;flex-direction:column}
-  .chat-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--fg)}
-  .chat-body{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(#000 0%, rgba(0,0,0,0.1) 100%)}
-  .composer{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--fg);align-items:flex-end}
-  .composer textarea{flex:1;min-height:46px;max-height:150px;resize:none}
-  .msg{max-width:72ch;padding:10px;border:1px solid var(--fg);border-radius:10px}
-  .me{align-self:flex-end;background:rgba(107,231,255,0.04)}
-  .them{align-self:flex-start;background:rgba(0,255,0,0.02)}
-  .meta{font-size:11px;color:var(--muted);margin-top:6px;word-break:break-all}
-  .status-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--danger);margin-right:8px}
-  .status-online{background:limegreen}
-  .typing{font-style:italic;color:var(--muted);font-size:13px}
-  .toast{position:fixed;right:18px;bottom:18px;background:rgba(0,0,0,0.8);border:1px solid var(--fg);padding:8px 12px;border-radius:8px;color:var(--fg)}
-  .controls-row{display:flex;gap:8px;flex-wrap:wrap}
-  .peer-chip{background:rgba(255,255,255,0.02);padding:6px 10px;border-radius:999px;border:1px solid var(--fg)}
-  .counter{font-size:12px;color:var(--muted)}
-  .limit-bar{height:6px;background:transparent;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.02)}
-  .limit-fill{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--muted))}
-  .search{display:flex;gap:8px}
-  .msg .actions{margin-top:8px;display:flex;gap:6px}
-  .pill{padding:4px 6px;border:1px solid var(--fg);border-radius:6px;font-size:12px}
-  .avatar{width:36px;height:36px;border-radius:8px;border:1px solid var(--fg);display:flex;align-items:center;justify-content:center}
+  * { box-sizing: border-box; margin:0; padding:0; font-family:'VT323', monospace; }
+  body { background:#000; color:#00FF00; }
+  .container { display:flex; height:100vh; border:1px solid #00FF00; }
+  .sidebar { width:25%; border-right:1px solid #00FF00; background:#000; display:flex; flex-direction:column; }
+  .account { padding:16px; border-bottom:1px solid #00FF00; }
+  .account h1 { color:#00FF00; font-size:20px; }
+  .account p { color:#00FF00; font-size:13px; margin-top:6px; word-break:break-all; }
+  .search { padding:12px; border-bottom:1px solid #00FF00; }
+  .search input { width:100%; padding:8px; border:1px solid #00FF00; background:#000; color:#00FF00; font-size:14px; border-radius:6px; }
+  .hint { font-size:12px; color:rgba(0,255,0,0.6); margin-top:6px; }
+  .chat-list { overflow-y:auto; flex-grow:1; padding:6px; }
+  .chat-item { display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid rgba(0,255,0,0.04); cursor:pointer; }
+  .chat-item:hover { background:rgba(0,255,0,0.03); }
+  .chat-area { flex:1; display:flex; flex-direction:column; background:#000; }
+  .chat-header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid #00FF00; }
+  .chat-header .info .name { font-size:20px; color:#00FF00; }
+  .chat-body { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:12px; }
+  .message { display:flex; gap:12px; align-items:flex-end; max-width:80%; }
+  .message.you { margin-left:auto; justify-content:flex-end; }
+  .avatar { width:36px; text-align:center; font-size:14px; color:#00FF00; }
+  .bubble { border:1px solid #00FF00; padding:8px 10px; background:transparent; color:#00FF00; font-size:15px; border-radius:8px; word-break:break-word; }
+  .message.you .bubble { background:rgba(0,255,0,0.08); }
+  .timestamp { font-size:11px; color:rgba(0,255,0,0.6); margin-top:6px; }
+  .chat-footer { border-top:1px solid #00FF00; padding:10px 12px; display:flex; align-items:center; gap:8px; }
+  .chat-footer input { flex:1; background:#000; border:1px solid #00FF00; color:#00FF00; font-size:15px; padding:8px; border-radius:6px; }
+  .chat-footer button { background:#00FF00; border:1px solid #00FF00; color:#000; padding:8px 12px; cursor:pointer; border-radius:6px; }
+  .small { font-size:12px; color:rgba(0,255,0,0.7); }
+  @media (max-width:800px){ .sidebar{ display:none; } .container{ flex-direction:column;} .chat-body{padding-bottom:120px;} .chat-footer{position:fixed;left:0;right:0;bottom:0;background:#000;} }
 </style>
 </head>
 <body>
-<div class="app" role="application" aria-label="P2P chat app">
-  <aside class="sidebar" aria-label="Sidebar">
-    <div class="brand">
-      <div><strong>P2P Chat</strong></div>
-      <div class="small">No servers</div>
-    </div>
+  <div class="container">
+    <aside class="sidebar" aria-label="sidebar">
+      <div class="account">
+        <h1>NEON P2P</h1>
+        <p id="meLabel">Not connected</p>
+        <div class="small">Room: <span id="roomLabel">Global</span></div>
+      </div>
 
-    <div class="section" aria-label="Connection">
-      <label class="small">Room</label>
-      <input id="room" type="text" value="notion-lite-room" aria-label="Room ID">
-      <div class="controls-row">
-        <label class="small"><input id="useIpfs" type="checkbox"> Use IPFS</label>
-        <label class="small"><input id="lite" type="checkbox" checked> Ultra-low</label>
-      </div>
-      <div class="controls-row">
-        <button id="join">Join</button>
-        <button id="leave" disabled>Leave</button>
-      </div>
-      <div class="small">Limit per message: <span id="limitText">50 KB</span></div>
-      <div class="small">Peers: <span id="peerCount">0</span></div>
-    </div>
-
-    <div class="section" aria-label="Identity">
-      <div style="display:flex;gap:8px;align-items:center">
-        <div class="avatar" id="avatar">ME</div>
-        <div style="flex:1">
-          <div class="small">Name</div>
-          <input id="displayName" type="text" placeholder="Your name">
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="regenKey" title="Generate new identity">New ID</button>
-        <button id="exportKey" title="Export public key">Export Pub</button>
-      </div>
-      <div class="small">Key status: <span id="keyStatus">not ready</span></div>
-    </div>
-
-    <div class="section" aria-label="Search">
-      <div class="small">Search history</div>
       <div class="search">
-        <input id="search" type="search" placeholder="Search messages..." aria-label="Search messages">
-        <button id="clearSearch">Clear</button>
+        <input id="groupInput" placeholder="Group name (leave empty = global)" />
+        <div class="hint">Type a group name then Save Session to persist across reloads.</div>
       </div>
-    </div>
 
-    <div class="section">
-      <div class="small">Diagnostics</div>
-      <pre id="status" class="small" style="white-space:pre-wrap">Idle</pre>
-    </div>
-  </aside>
-
-  <main class="chat" aria-live="polite">
-    <div class="chat-header">
-      <div>
-        <strong id="roomLabel">notion-lite-room</strong>
-        <div id="presence" class="typing small">disconnected</div>
-      </div>
-      <div>
-        <div class="controls-row">
-          <div id="connectIndicator" class="peer-chip">offline</div>
-          <div class="pill" id="msgLimitPill">50KB</div>
+      <div class="search" style="border-top:0;">
+        <input id="nameInput" placeholder="Display name (optional)" />
+        <div style="margin-top:8px; display:flex; gap:8px;">
+          <button id="saveSessionBtn">Save Session</button>
+          <button id="clearSessionBtn">Clear Session</button>
         </div>
       </div>
-    </div>
 
-    <div id="log" class="chat-body" role="log" aria-relevant="additions text"></div>
+      <div class="chat-list" id="memberList" aria-label="members"></div>
+    </aside>
 
-    <div class="composer" role="region" aria-label="Message composer">
-      <textarea id="text" placeholder="Type a message..." aria-label="Message" maxlength="51200"></textarea>
-      <div style="display:flex;flex-direction:column;gap:8px;width:200px">
-        <div style="display:flex;gap:6px">
-          <button id="send">Send</button>
-          <button id="attach">Attach</button>
-          <button id="clear">Clear</button>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div class="counter" id="charCounter">0</div>
-          <div class="counter" id="statusTiny">idle</div>
-        </div>
-        <div class="limit-bar"><div id="limitFill" class="limit-fill"></div></div>
-      </div>
-    </div>
-  </main>
-</div>
+    <main class="chat-area" aria-live="polite">
+      <header class="chat-header">
+        <div class="info"><div class="name">🌐 <span id="roomName">Global</span></div></div>
+        <div class="small">Your ID: <span id="myId">...</span></div>
+      </header>
 
-<div id="toasts" aria-live="polite"></div>
+      <section class="chat-body" id="chatBody" role="log"></section>
 
-<!-- Libraries -->
-<script src="https://cdn.jsdelivr.net/npm/webtorrent@2.7.3/webtorrent.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/cborg@4.2.6/dist/cborg.min.js"></script>
+      <footer class="chat-footer">
+        <input id="msgInput" placeholder="Type a message..." autocomplete="off" />
+        <button id="sendBtn" disabled>Send</button>
+      </footer>
+    </main>
+  </div>
 
-<script type="module">
-/* =============================
-   P2P Chat — dynamic & real-time
-   =============================
-   - Drop-in single-file app
-   - Uses WebTorrent for signaling (no backend)
-   - Message encoding: CBOR + deflate (pako)
-   - Signature: ECDSA-P256 (optional persistent keys)
-   - Persistence: IndexedDB (messages + key)
-   - UX: typing, presence, message states, retries, toasts
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script>
+<script>
+/*
+  Neon P2P Group Chat (mesh) with persistent signed session cookie.
+  - Cookie stores signed payload: { sessionId, username, room, iat }
+  - HMAC key stored in sessionStorage so only this tab can verify cookie.
+  - Session lets user get deterministic peerId so reload auto-rejoins.
+  - Mesh: each peer connects to known peers and relays join + message events.
 */
 
-// ---- Configuration ----
-const MSG_LIMIT_BYTES = 50 * 1024; // 50KB
-const TRACKERS_BASE = [
-  'wss://tracker.openwebtorrent.com',
-  'wss://tracker.btorrent.xyz',
-  'wss://tracker.fastcast.nz'
+// --------- Config ----------
+const SESSION_COOKIE = 'neon_p2p_session';
+const COOKIE_EXP_SECONDS = 60 * 60; // 1 hour
+const peerJsHost = '0.peerjs.com';
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'turn:numb.viagenie.ca', username: 'webrtc@live.com', credential: 'muazkh' }
 ];
 
-// ---- DOM ----
-const roomEl = document.getElementById('room');
-const joinBtn = document.getElementById('join'), leaveBtn = document.getElementById('leave');
-const useIpfsEl = document.getElementById('useIpfs'), liteEl = document.getElementById('lite');
-const logEl = document.getElementById('log'), textEl = document.getElementById('text');
-const sendBtn = document.getElementById('send'), clearBtn = document.getElementById('clear');
-const statusPre = document.getElementById('status'), peerCountEl = document.getElementById('peerCount');
-const presenceEl = document.getElementById('presence'), connectIndicator = document.getElementById('connectIndicator');
-const charCounter = document.getElementById('charCounter'), limitFill = document.getElementById('limitFill');
-const roomLabel = document.getElementById('roomLabel'), statusTiny = document.getElementById('statusTiny');
-const displayNameEl = document.getElementById('displayName'), avatarEl = document.getElementById('avatar'), keyStatusEl = document.getElementById('keyStatus');
-const regenKeyBtn = document.getElementById('regenKey'), exportKeyBtn = document.getElementById('exportKey');
-const searchEl = document.getElementById('search'), clearSearchBtn = document.getElementById('clearSearch');
-const msgLimitPill = document.getElementById('msgLimitPill');
+// --------- UI refs ----------
+const meLabel = document.getElementById('meLabel');
+const myIdEl = document.getElementById('myId');
+const roomNameEl = document.getElementById('roomName');
+const roomLabel = document.getElementById('roomLabel');
+const memberList = document.getElementById('memberList');
+const chatBody = document.getElementById('chatBody');
+const msgInput = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+const groupInput = document.getElementById('groupInput');
+const nameInput = document.getElementById('nameInput');
+const saveSessionBtn = document.getElementById('saveSessionBtn');
+const clearSessionBtn = document.getElementById('clearSessionBtn');
 
-// ---- State ----
-let client = null;
-let torrent = null;
-let infoHash = null;
-let peers = new Map(); // pid -> datachannel
-let outbox = []; // queued messages
-let seen = new Set();
-let helia = null, addToIpfs = async () => ({cid:null});
-let keyPair = null, publicKeyB64 = null; // ECDSA
-let db = null; // IndexedDB
-let joined = false;
-const T = { HELLO:0, CHAT:1, ACK:2, WANT:3, TYPING:4 };
+// --------- State ----------
+let peer = null;
+let myId = '';
+let username = '';
+let roomName = '';
+let connections = {}; // peerId -> DataConnection
+let members = new Set();
+let lastPeersKey = 'neon_last_peers';
 
-// ---- Helpers ----
-const te = new TextEncoder(), td = new TextDecoder();
-function logStatus(s){ statusPre.textContent = s; console.debug('[status]', s); }
-function toast(msg, timeout=3500){ const t = document.createElement('div'); t.className='toast'; t.textContent = msg; document.getElementById('toasts').appendChild(t); setTimeout(()=>t.remove(), timeout); }
-function utf8Size(s){ return te.encode(s).length; }
-async function sha1Hex(s){ const h = await crypto.subtle.digest('SHA-1', te.encode(s)); return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join(''); }
-async function sha256Hex(buf){ const h = await crypto.subtle.digest('SHA-256', buf); return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join(''); }
+// ---------- small helpers ----------
+function nowTime(){ return new Date().toLocaleTimeString(); }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
-/* CBOR + deflate */
-function pack(obj){ const b = CBOR.encode(obj); return pako.deflate(b); }
-function unpack(u8){ const raw = pako.inflate(u8); return CBOR.decode(raw); }
+// ---------- cookie & HMAC utilities ----------
+function setCookie(name, value, maxAgeSeconds){
+  const secureFlag = location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${name}=${encodeURIComponent(value)}; max-age=${maxAgeSeconds}; path=/; SameSite=Lax${secureFlag}`;
+}
+function getCookie(name){
+  const cookies = document.cookie ? document.cookie.split('; ') : [];
+  for(const c of cookies){ const [k,v] = c.split('='); if(k===name) return decodeURIComponent(v); }
+  return null;
+}
+function deleteCookie(name){ document.cookie = `${name}=; max-age=0; path=/; SameSite=Lax`; }
 
-/* crypto key utils */
-function abToB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
-function b64ToAb(b64){ const s = atob(b64); const u = new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u.buffer; }
-async function genKeys(){
-  keyPair = await crypto.subtle.generateKey({name:'ECDSA', namedCurve:'P-256'}, true, ['sign','verify']);
-  const spki = await crypto.subtle.exportKey('spki', keyPair.publicKey);
-  publicKeyB64 = abToB64(spki);
-  await persistKeyPair();
-  keyStatusEl.textContent = 'ready';
+function b64uEncode(bytes){
+  return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
-async function persistKeyPair(){
-  try {
-    const pkcs8 = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
-    const spki = await crypto.subtle.exportKey('spki', keyPair.publicKey);
-    await idbPut('meta','key', { pkcs8: abToB64(pkcs8), spki: abToB64(spki) });
-  } catch(e){ console.warn('persist key fail', e); }
-}
-async function loadKeyPairFromStorage(){
-  try{
-    const rec = await idbGet('meta','key');
-    if (!rec) return false;
-    const priv = b64ToAb(rec.pkcs8), pub = b64ToAb(rec.spki);
-    const privKey = await crypto.subtle.importKey('pkcs8', priv, {name:'ECDSA', namedCurve:'P-256'}, true, ['sign']);
-    const pubKey = await crypto.subtle.importKey('spki', pub, {name:'ECDSA', namedCurve:'P-256'}, true, ['verify']);
-    keyPair = { privateKey: privKey, publicKey: pubKey };
-    publicKeyB64 = abToB64(pub);
-    keyStatusEl.textContent = 'ready';
-    return true;
-  } catch(e){ console.warn('load key fail', e); return false; }
-}
-async function signBytes(buf){
-  if (!keyPair) return null;
-  const sig = await crypto.subtle.sign({name:'ECDSA', hash:'SHA-256'}, keyPair.privateKey, buf);
-  return abToB64(sig);
-}
-async function verifyBytes(pubB64, buf, sigB64){
-  try{
-    const spki = b64ToAb(pubB64);
-    const pub = await crypto.subtle.importKey('spki', spki, {name:'ECDSA', namedCurve:'P-256'}, true, ['verify']);
-    const sig = b64ToAb(sigB64);
-    return await crypto.subtle.verify({name:'ECDSA', hash:'SHA-256'}, pub, sig, buf);
-  } catch(e){ return false; }
+function b64uDecodeToUint8Array(str){
+  str = str.replace(/-/g,'+').replace(/_/g,'/');
+  while(str.length % 4) str += '=';
+  const bin = atob(str);
+  const arr = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+  return arr;
 }
 
-/* ---- IndexedDB (tiny wrapper) ---- */
-function idbOpen(){
-  return new Promise((res,rej)=>{
-    const r = indexedDB.open('p2p-chat-v1', 1);
-    r.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('messages')) db.createObjectStore('messages', { keyPath:'id' });
-      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath:'k' });
-    };
-    r.onsuccess = e => { db = e.target.result; res(db); };
-    r.onerror = e => rej(e);
-  });
+function randomBytes(n){ const a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
+async function importHmacKey(raw){ return crypto.subtle.importKey('raw', raw, { name:'HMAC', hash:'SHA-256' }, false, ['sign','verify']); }
+async function hmacSignBase64url(hmacKey, payloadUint8){
+  const sig = await crypto.subtle.sign('HMAC', hmacKey, payloadUint8);
+  return b64uEncode(sig);
 }
-function idbPut(store, key, value){
-  return new Promise((res,rej)=>{
-    const tx = db.transaction(store,'readwrite').objectStore(store);
-    tx.put(Object.assign({k:key}, value, {k:key})).onsuccess = ()=>res(true);
-  });
-}
-function idbGet(store, key){
-  return new Promise((res,rej)=>{
-    const tx = db.transaction(store,'readonly').objectStore(store);
-    const req = tx.get(key);
-    req.onsuccess = e => res(e.target.result ? Object.assign({}, e.target.result) : null);
-    req.onerror = e => rej(e);
-  });
-}
-function idbAddMessage(msg){
-  return new Promise((res,rej)=>{
-    const tx = db.transaction('messages','readwrite').objectStore('messages');
-    tx.put(msg).onsuccess = ()=>res(true);
-    tx.onerror = (e)=>rej(e);
-  });
-}
-function idbGetAllMessages(){
-  return new Promise((res,rej)=>{
-    const tx = db.transaction('messages','readonly').objectStore('messages');
-    const req = tx.getAll();
-    req.onsuccess = e => res(e.target.result || []);
-    req.onerror = e => rej(e);
-  });
+async function hmacVerify(hmacKey, payloadUint8, sigB64u){
+  const sigBytes = b64uDecodeToUint8Array(sigB64u);
+  return crypto.subtle.verify('HMAC', hmacKey, sigBytes, payloadUint8);
 }
 
-/* ---- IPFS (optional Helia dynamic init) ---- */
-async function initIpfsIfEnabled(){
-  if (!useIpfsEl.checked) { addToIpfs = async()=>({cid:null}); return; }
-  try {
-    // dynamic import attempt; Helia builds vary — tolerant approach
-    const mod = await import('https://cdn.jsdelivr.net/npm/@helia/helia@4.2.1/dist/index.min.js');
-    const create = mod.createHelia || mod.default?.createHelia || mod;
-    const bsmod = await import('https://cdn.jsdelivr.net/npm/blockstore-core@5.0.3/dist/index.min.js').catch(()=>null);
-    const dsmod = await import('https://cdn.jsdelivr.net/npm/datastore-core@9.2.3/dist/index.min.js').catch(()=>null);
-    const MemoryBlockstore = bsmod?.MemoryBlockstore || (bsmod && bsmod.default?.MemoryBlockstore);
-    const MemoryDatastore = dsmod?.MemoryDatastore || (dsmod && dsmod.default?.MemoryDatastore);
-    helia = await create.createHelia ? await create.createHelia({
-      blockstore: MemoryBlockstore ? new MemoryBlockstore() : undefined,
-      datastore: MemoryDatastore ? new MemoryDatastore() : undefined
-    }) : await create({});
-    if (helia && helia.add) {
-      addToIpfs = async bytes => {
-        const r = await helia.add(bytes);
-        return { cid: r.toString?.() || String(r) };
-      };
-    } else {
-      addToIpfs = async()=>({cid:null});
-    }
-    toast('IPFS ready');
-  } catch(e){
-    console.warn('IPFS init failed', e); toast('IPFS unavailable — continuing offline');
-    addToIpfs = async()=>({cid:null});
+// ---------- session token ----------
+async function createAndStoreSession(u, room){
+  const rawSecret = randomBytes(32);
+  sessionStorage.setItem('neon_session_secret_b64', b64uEncode(rawSecret));
+  const sessionId = (Math.random().toString(36).slice(2,10));
+  const payload = { sessionId, username: u, room: room, iat: Math.floor(Date.now()/1000) };
+  const payloadJson = JSON.stringify(payload);
+  const payloadBytes = new TextEncoder().encode(payloadJson);
+  const hmacKey = await importHmacKey(rawSecret);
+  const sig = await hmacSignBase64url(hmacKey, payloadBytes);
+  const cookieVal = `${b64uEncode(payloadBytes)}.${sig}`;
+  setCookie(SESSION_COOKIE, cookieVal, COOKIE_EXP_SECONDS);
+  return payload;
+}
+
+async function verifySessionFromCookie(){
+  const cookie = getCookie(SESSION_COOKIE);
+  if(!cookie) return null;
+  const parts = cookie.split('.');
+  if(parts.length !== 2) return null;
+  const [payloadB64, sigB64] = parts;
+  let payloadBytes;
+  try { payloadBytes = b64uDecodeToUint8Array(payloadB64); } catch(e){ return null; }
+  let payload;
+  try { payload = JSON.parse(new TextDecoder().decode(payloadBytes)); } catch(e){ return null; }
+  const now = Math.floor(Date.now()/1000);
+  if(!payload.iat || (payload.iat + COOKIE_EXP_SECONDS) < now){ deleteCookie(SESSION_COOKIE); return null; }
+  const rawSecretB64 = sessionStorage.getItem('neon_session_secret_b64');
+  if(!rawSecretB64) return null;
+  const rawSecret = b64uDecodeToUint8Array(rawSecretB64);
+  const hmacKey = await importHmacKey(rawSecret);
+  const verified = await hmacVerify(hmacKey, payloadBytes, sigB64);
+  if(!verified){ deleteCookie(SESSION_COOKIE); return null; }
+  return payload;
+}
+
+// ---------- Peer startup & mesh logic ----------
+function buildPeerId(sessionId, username, room){
+  // deterministic id per session so reload reuses same id and peers can reconnect automatically
+  const cleanUser = (username || 'anon').replace(/\s+/g,'').slice(0,16) || 'anon';
+  const cleanRoom = (room || 'global').replace(/\s+/g,'').slice(0,20);
+  return `${cleanRoom}-${cleanUser}-${sessionId}`;
+}
+
+async function startFromSessionOrCreate(){
+  // try verify cookie
+  const verified = await verifySessionFromCookie();
+  if(verified){
+    username = verified.username || `anon${Math.floor(Math.random()*1000)}`;
+    roomName = verified.room || '';
+    nameInput.value = username;
+    groupInput.value = roomName;
+    roomNameEl.textContent = roomName || 'Global';
+    await startPeerUsingSession(verified.sessionId);
+    return;
   }
+  // no valid cookie -> create
+  username = (nameInput.value || `anon${Math.floor(Math.random()*1000)}`).trim();
+  roomName = (groupInput.value || '').trim();
+  const payload = await createAndStoreSession(username, roomName);
+  nameInput.value = username;
+  groupInput.value = roomName;
+  roomNameEl.textContent = roomName || 'Global';
+  await startPeerUsingSession(payload.sessionId);
 }
 
-/* ---- Signaling / WebTorrent Join ---- */
-function trackers(){ return liteEl.checked ? TRACKERS_BASE.slice(0,2) : TRACKERS_BASE; }
+function startPeerUsingSession(sessionId){
+  return new Promise((resolve) => {
+    const peerId = buildPeerId(sessionId, username, roomName);
+    myId = peerId;
+    meLabel.textContent = `${username} (${myId})`;
+    myIdEl.textContent = myId;
 
-async function joinRoom(room){
-  try{
-    await initIpfsIfEnabled();
-    await idbOpen();
-    // load/generate keys
-    const ok = await loadKeyPairFromStorage();
-    if (!ok) { await genKeys(); }
-    // display info
-    roomLabel.textContent = room;
-    setStatus('Announcing to trackers...');
-    client = new WebTorrent({ tracker: { announce: trackers(), rtcConfig: { iceServers:[{urls:'stun:stun.l.google.com:19302'}] } } });
-    infoHash = await sha1Hex('notion-p2p-chat:' + room);
-    const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=p2p-chat&tr=${trackers().map(encodeURIComponent).join('&tr=')}`;
-
-    torrent = client.add(magnet, { announce: trackers(), store: false }, t => {
-      setStatus('Announced. Waiting for peers...');
-      t.on('wire', wire => {
-        // try to find peer connection (varies across webtorrent builds)
-        const pc = wire.peerConn && wire.peerConn._pc ? wire.peerConn._pc : (wire.peerConn || wire.peerConnection || null);
-        // set up channel handling
-        if (pc && typeof pc.createDataChannel === 'function') {
-          let channel = null;
-          try { channel = pc.createDataChannel('chat'); } catch(e) { /*ignore*/ }
-          pc.ondatachannel = evt => {
-            if (evt.channel && evt.channel.label === 'chat') setupDC(evt.channel, wire.peerId || wire.peerIdHex || Math.random().toString(36));
-          };
-          if (channel) setupDC(channel, wire.peerId || wire.peerIdHex || Math.random().toString(36));
-        } else {
-          // fallback: some builds emit 'data' events — best-effort
-          if (wire.on) wire.on('data', () => {});
-        }
-      });
+    peer = new Peer(myId, {
+      host: peerJsHost,
+      secure: true,
+      port: 443,
+      path: '/',
+      config: { iceServers: ICE_SERVERS }
     });
 
-    client.on('warning', w => setStatus('Warning: ' + (w.message||w)));
-    client.on('error', e => setStatus('Error: ' + (e.message||e)));
-    joined = true;
-    joinBtn.disabled = true; leaveBtn.disabled = false;
-    toast('Joined room: ' + room);
-    // load message history
-    const msgs = await idbGetAllMessages();
-    msgs.sort((a,b)=> a.ts - b.ts).forEach(renderMessageFromStorage);
-    // periodic flush
-    setInterval(()=>{ if (peers.size) flushOutbox(); updatePeerStatus(); }, 800);
-  } catch(e){ console.error(e); toast('Join failed'); setStatus('Join error'); }
-}
-
-function leaveRoom(){
-  try {
-    if (client) client.destroy();
-  } catch(e){}
-  client = null; torrent = null; peers.clear(); outbox = []; seen.clear();
-  joined = false;
-  joinBtn.disabled = false; leaveBtn.disabled = true;
-  setStatus('Left room');
-  toast('Left room');
-  updatePeerStatus();
-}
-
-/* ---- Data channel setup & protocol ---- */
-function setupDC(dc, pid){
-  if (peers.has(pid)) return;
-  peers.set(pid, dc);
-  dc.binaryType = 'arraybuffer';
-
-  dc.onopen = () => {
-    updatePeerStatus();
-    // send HELLO with recent IDs + pubkey + name
-    const recentIds = outbox.slice(-32).map(x=>x.id);
-    const hello = { t:T.HELLO, ids: recentIds, pub: publicKeyB64, name: displayNameEl.value || 'Anon' };
-    try { dc.send(CBOR.encode(hello)); } catch(e){}
-    flushOutbox();
-  };
-  dc.onclose = () => { peers.delete(pid); updatePeerStatus(); };
-  let expectingPayload = false, pendingId = null;
-  dc.onmessage = async evt => {
-    try {
-      if (!expectingPayload){
-        let header;
-        try { header = CBOR.decode(new Uint8Array(evt.data)); } catch { return; }
-        if (header.t === T.HELLO){
-          const missing = (header.ids||[]).filter(id => !seen.has(id)).slice(0,32);
-          if (missing.length) sendWant(missing);
-          // store peer pubkey on channel
-          if (header.pub) dc._pub = header.pub;
-          if (header.name) dc._name = header.name;
-          return;
+    peer.on('open', id => {
+      myIdEl.textContent = id;
+      appendSystem(`Connected as ${id}`);
+      sendBtn.disabled = false;
+      // bootstrap last peers
+      const last = JSON.parse(sessionStorage.getItem(lastPeersKey) || '[]');
+      for(const p of last){
+        if(p && p !== myId && !connections[p]){
+          const c = peer.connect(p);
+          c.on('open', ()=> setupConnection(c));
+          c.on('error', ()=>{});
         }
-        if (header.t === T.WANT){
-          const need = new Set(header.ids||[]);
-          for (const item of outbox){ if (need.has(item.id)){ try{ dc.send(CBOR.encode({t:T.CHAT, id:item.id})); dc.send(item.wire);}catch{} } }
-          return;
-        }
-        if (header.t === T.ACK){
-          const idx = outbox.findIndex(x=>x.id===header.id);
-          if (idx >= 0) outbox.splice(idx,1);
-          return;
-        }
-        if (header.t === T.CHAT){
-          pendingId = header.id;
-          dc._pendingSig = header.sig || null;
-          dc._pendingPub = header.pub || dc._pub || null;
-          expectingPayload = true;
-          return;
-        }
-        if (header.t === T.TYPING){
-          // show typing indicator for that peer
-          showPeerTyping(dc._name || 'peer');
-          return;
-        }
-        return;
-      } else {
-        expectingPayload = false;
-        const u8 = new Uint8Array(evt.data);
-        let obj;
-        try { obj = unpack(u8); } catch { return; }
-        const h = await sha256Hex(u8);
-        const idCheck = pendingId; pendingId = null;
-        if (idCheck !== h || seen.has(idCheck)){ sendAck(idCheck); return; }
-        // optional verification
-        let verified = true;
-        if (dc._pendingSig && dc._pendingPub) {
-          try { verified = await verifyBytes(dc._pendingPub, u8.buffer, dc._pendingSig); } catch { verified = false; }
-        }
-        seen.add(h);
-        // render
-        renderIncomingMessage(obj, {id:h, verified, pub: dc._pendingPub, fromName:dc._name});
-        sendAck(h);
       }
-    } catch(e){
-      console.warn('dc onmessage error', e);
-    }
-  };
+      // add self to last peers
+      const newList = [myId].concat(last.filter(x=>x!==myId)).slice(0,12);
+      sessionStorage.setItem(lastPeersKey, JSON.stringify(newList));
+      resolve();
+    });
+
+    peer.on('connection', conn => {
+      // accept inbound connections
+      setupConnection(conn);
+    });
+
+    peer.on('disconnected', () => appendSystem('Peer disconnected — trying to reconnect...'));
+    peer.on('error', err => appendSystem('Peer error: ' + (err && err.type ? err.type : err)));
+  });
 }
 
-/* ---- ACK, WANT, TYPING ---- */
-function sendAck(id){
-  try { const f = CBOR.encode({ t:T.ACK, id }); for (const dc of peers.values()) if (dc.readyState==='open') dc.send(f); } catch(e){}
-}
-function sendWant(ids){
-  try { const f = CBOR.encode({ t:T.WANT, ids }); for (const dc of peers.values()) if (dc.readyState==='open') dc.send(f); } catch(e){}
-}
-function sendTyping(){
-  try { const f = CBOR.encode({ t:T.TYPING }); for (const dc of peers.values()) if (dc.readyState==='open') dc.send(f); } catch(e){}
-}
-let typingTimer = null;
-function showPeerTyping(name){
-  presenceEl.textContent = `${name} is typing...`;
-  clearTimeout(typingTimer);
-  typingTimer = setTimeout(()=> presenceEl.textContent = `${peerOpenCount()} peers`, 1500);
-}
-
-/* ---- Outbox logic (pack + sign + retries) ---- */
-async function enqueueChat(text){
-  const size = utf8Size(text);
-  if (size > MSG_LIMIT_BYTES){ toast('Message too large'); return; }
-  let cid = null;
-  if (useIpfsEl.checked){
-    try { const res = await addToIpfs(te.encode(text)); cid = res.cid; } catch(e){ console.warn('ipfs add fail', e); }
+function setupConnection(conn){
+  if(connections[conn.peer]) {
+    // if already connected, close duplicate
+    try{ conn.close(); }catch(e){}
+    return;
   }
-  const payload = { t:T.CHAT, txt: text, cid, ts: Date.now(), name: displayNameEl.value || 'You' };
-  const wire = pack(payload);
-  const sig = await signBytes(wire);
-  const id = await sha256Hex(wire);
-  outbox.push({ id, wire, sig, pub: publicKeyB64, tries:0, nextAt:0 });
-  seen.add(id);
-  // store locally
-  await idbAddMessage({ id, txt:text, ts:payload.ts, from:'me', status:'queued', cid });
-  renderMessageLocal({id, txt:text, ts:payload.ts, cid});
-  flushOutbox();
+  connections[conn.peer] = conn;
+  members.add(conn.peer);
+  rebuildMemberList();
+  appendSystem(`${conn.peer} connected`);
+  // send join message so remote can connect to others
+  setTimeout(()=> {
+    try { conn.send({ type:'join', id: myId }); } catch(e){}
+  }, 200);
+
+  conn.on('data', data => {
+    try {
+      if(typeof data === 'object' && data.type){
+        handleSignal(data, conn.peer);
+      } else if (typeof data === 'string') {
+        appendMessage(conn.peer, data, false);
+        // broadcast to others to keep mesh (optional propagation)
+        relayToOthers({ type:'message', from: conn.peer, text: data }, conn.peer);
+      }
+    } catch(e){}
+  });
+
+  conn.on('close', ()=> {
+    delete connections[conn.peer];
+    members.delete(conn.peer);
+    rebuildMemberList();
+    appendSystem(`${conn.peer} disconnected`);
+  });
+
+  conn.on('error', ()=>{});
 }
 
-function flushOutbox(){
-  const now = Date.now();
-  const open = [...peers.values()].filter(dc => dc.readyState === 'open');
-  if (!open.length) return;
-  for (const item of outbox){
-    if (item.nextAt > now) continue;
-    // header contains id and signature + pub
-    const header = CBOR.encode({ t:T.CHAT, id:item.id, sig:item.sig, pub:item.pub });
-    for (const dc of open){
-      try { dc.send(header); dc.send(item.wire); } catch(e){}
+// handle control signals: join/message/peerlist
+function handleSignal(obj, fromPeer){
+  if(obj.type === 'join'){
+    // connect back if not already connected
+    if(obj.id && obj.id !== myId && !connections[obj.id]){
+      const c = peer.connect(obj.id);
+      c.on('open', ()=> setupConnection(c));
+      c.on('error', ()=>{});
     }
-    item.tries++;
-    const delay = Math.min(2000, 150 * (2 ** Math.min(item.tries, 6)));
-    item.nextAt = now + delay;
-    // update UI status
-    updateStoredMessageStatus(item.id, 'sending');
+  } else if (obj.type === 'peerlist'){
+    // attempt to connect to listed peers
+    (obj.peers || []).forEach(p => {
+      if(p && p !== myId && !connections[p]){
+        const c = peer.connect(p);
+        c.on('open', ()=> setupConnection(c));
+        c.on('error', ()=>{});
+      }
+    });
+  } else if (obj.type === 'message'){
+    appendMessage(obj.from || fromPeer, obj.text, false);
+    // relay further (controlled)
+    relayToOthers(obj, fromPeer);
   }
 }
 
-/* ---- Rendering ---- */
-function createMsgEl({txt, ts, who, meta, id, cid, status, verified}) {
+function relayToOthers(obj, exceptPeer){
+  // small TTL-less relay to propagate message across mesh; avoid sending back to origin
+  for(const id in connections){
+    if(id === exceptPeer) continue;
+    const c = connections[id];
+    if(c && c.open){
+      try { c.send(obj); } catch(e){}
+    }
+  }
+}
+
+// ---------- UI + actions ----------
+function appendMessage(from, text, fromMe){
   const wrap = document.createElement('div');
-  wrap.className = 'msg ' + (who === 'me' ? 'me' : 'them');
-  wrap.dataset.id = id || '';
-  const text = document.createElement('div'); text.textContent = txt; wrap.appendChild(text);
-  const m = document.createElement('div'); m.className='meta';
-  m.textContent = `${new Date(ts).toLocaleString()}${meta ? ' • '+meta : ''}`;
-  if (cid) { const cspan = document.createElement('div'); cspan.className='small'; cspan.textContent = `CID: ${cid}`; m.appendChild(cspan); }
-  if (status) { const s = document.createElement('div'); s.className='small'; s.textContent = `status: ${status}`; m.appendChild(s); }
-  if (verified === false){ const v = document.createElement('div'); v.className='small'; v.textContent = 'signature: unverified'; m.appendChild(v); }
-  wrap.appendChild(m);
-  const actions = document.createElement('div'); actions.className='actions';
-  const copy = document.createElement('button'); copy.textContent='Copy'; copy.onclick = ()=>navigator.clipboard.writeText(txt).then(()=>toast('copied'));
-  const resend = document.createElement('button'); resend.textContent='Retry'; resend.onclick = ()=>retryMessage(id);
-  actions.appendChild(copy); actions.appendChild(resend);
-  wrap.appendChild(actions);
-  return wrap;
-}
-async function renderMessageLocal(msg){
-  const el = createMsgEl({txt:msg.txt, ts:msg.ts, who:'me', id:msg.id, cid:msg.cid, status:'queued'});
-  logEl.appendChild(el); logEl.scrollTop = logEl.scrollHeight;
-}
-function renderMessageFromStorage(msg){
-  const el = createMsgEl({txt:msg.txt, ts:msg.ts, who: msg.from === 'me' ? 'me' : 'them', id:msg.id, cid:msg.cid, status:msg.status});
-  logEl.appendChild(el);
-}
-async function renderIncomingMessage(obj, meta){
-  // store
-  const id = meta.id || (await sha256Hex(pack(obj)));
-  await idbAddMessage({ id, txt: obj.txt, ts: obj.ts || Date.now(), from: meta.fromName || 'peer', status:'delivered', cid:obj.cid, verified:meta.verified });
-  const el = createMsgEl({txt:obj.txt, ts:obj.ts||Date.now(), who:'them', id, cid: obj.cid, verified: meta.verified});
-  logEl.appendChild(el); logEl.scrollTop = logEl.scrollHeight;
-}
-
-/* ---- Helpers: message store updates & retry ---- */
-async function updateStoredMessageStatus(id, status){
-  // read existing message
-  const msgs = await idbGetAllMessages();
-  const m = msgs.find(x=>x.id===id);
-  if (m){ m.status = status; await idbAddMessage(m); // overwrite
-    // update UI if present
-    const el = logEl.querySelector(`[data-id="${id}"] .meta`);
-    if (el) el.textContent = el.textContent.split('status:')[0] + `status: ${status}`;
+  wrap.className = 'message' + (fromMe ? ' you' : '');
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = fromMe ? 'You' : (from ? from.split('-').slice(-1)[0] : 'Peer');
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = `<div>${escapeHtml(text)}</div><div class="timestamp">${nowTime()}</div>`;
+  if(fromMe){
+    wrap.appendChild(bubble);
+    wrap.appendChild(avatar);
+  } else {
+    wrap.appendChild(avatar);
+    wrap.appendChild(bubble);
   }
-}
-async function retryMessage(id){
-  const m = (await idbGetAllMessages()).find(x=>x.id===id);
-  if (!m) return toast('Message not found');
-  await enqueueChat(m.txt);
+  chatBody.appendChild(wrap);
+  chatBody.scrollTop = chatBody.scrollHeight;
 }
 
-/* ---- UI updates: peers, presence ---- */
-function peerOpenCount(){ let n=0; for(const dc of peers.values()) if (dc.readyState==='open') n++; return n; }
-function updatePeerStatus(){
-  const n = peerOpenCount();
-  peerCountEl.textContent = String(n);
-  connectIndicator.textContent = n ? `${n} peer${n>1?'s':''}` : 'offline';
-  connectIndicator.className = n ? 'peer-chip status-online' : 'peer-chip';
-  presenceEl.textContent = n ? `${n} peers connected` : 'disconnected';
-  statusTiny.textContent = n ? 'online' : 'offline';
+function appendSystem(text){
+  const div = document.createElement('div');
+  div.className = 'small';
+  div.style.textAlign = 'center';
+  div.style.margin = '8px 0';
+  div.textContent = `${text} (${nowTime()})`;
+  chatBody.appendChild(div);
+  chatBody.scrollTop = chatBody.scrollHeight;
 }
 
-/* ---- Incoming render helpers ---- */
-function renderMessageFromStorage(msg){ // override previous simple impl to ensure dedupe
-  const existing = logEl.querySelector(`[data-id="${msg.id}"]`);
-  if (existing) return;
-  const el = createMsgEl({txt:msg.txt, ts:msg.ts, who: msg.from === 'me' ? 'me' : 'them', id:msg.id, cid:msg.cid, status:msg.status});
-  logEl.appendChild(el);
+function rebuildMemberList(){
+  memberList.innerHTML = '';
+  const arr = Array.from(members).sort();
+  arr.forEach(id => {
+    const el = document.createElement('div');
+    el.className = 'chat-item';
+    el.innerHTML = `<div><div class="small">${escapeHtml(id.split('-').slice(-2)[0])}</div><div class="small" style="opacity:0.7">${escapeHtml(id)}</div></div>
+                    <div class="small">${connections[id] && connections[id].open ? 'online' : 'offline'}</div>`;
+    memberList.appendChild(el);
+  });
 }
 
-/* ---- Event handlers ---- */
-textEl.addEventListener('input', e=>{
-  const len = utf8Size(textEl.value || '');
-  charCounter.textContent = `${len} bytes`;
-  const pct = Math.min(1, len / MSG_LIMIT_BYTES) * 100;
-  limitFill.style.width = pct + '%';
-  if (len > MSG_LIMIT_BYTES) limitFill.style.background = 'linear-gradient(90deg,var(--danger),var(--fg))'; else limitFill.style.background = '';
-  // typing notify
-  sendTyping();
+// send message to all connections and locally
+sendBtn.addEventListener('click', async () => {
+  const t = msgInput.value.trim();
+  if(!t) return;
+  appendMessage('You', t, true);
+  // broadcast structured message
+  const obj = { type:'message', from: myId, text: t };
+  for(const id in connections){
+    const c = connections[id];
+    if(c && c.open) try { c.send(obj); } catch(e){}
+  }
+  msgInput.value = '';
 });
-textEl.addEventListener('keydown', e=>{ if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendBtn.click(); } });
+msgInput.addEventListener('keypress', e => { if(e.key === 'Enter'){ e.preventDefault(); sendBtn.click(); } });
 
-sendBtn.addEventListener('click', async ()=>{
-  const txt = textEl.value.trim(); if (!txt) return;
-  await enqueueChat(txt);
-  textEl.value = '';
-  charCounter.textContent = '0 bytes'; limitFill.style.width='0%';
+// Save session button — creates/updates signed cookie so reload restores session
+saveSessionBtn.addEventListener('click', async () => {
+  username = (nameInput.value || username || `anon${Math.floor(Math.random()*1000)}`).trim();
+  roomName = (groupInput.value || roomName || '').trim();
+  const payload = await createAndStoreSession(username, roomName);
+  roomNameEl.textContent = payload.room || 'Global';
+  appendSystem('Session saved. You will auto-rejoin after reload.');
 });
 
-joinBtn.addEventListener('click', ()=> joinRoom(roomEl.value || 'notion-lite-room'));
-leaveBtn.addEventListener('click', ()=> leaveRoom());
-clearBtn.addEventListener('click', ()=>{ textEl.value=''; charCounter.textContent='0 bytes'; limitFill.style.width='0%'; });
-regenKeyBtn.addEventListener('click', async ()=> { await genKeys(); toast('New identity created'); });
-exportKeyBtn.addEventListener('click', ()=>{ if (!publicKeyB64) return toast('no key'); navigator.clipboard.writeText(publicKeyB64).then(()=>toast('pubkey copied')) });
-
-searchEl.addEventListener('input', async ()=>{
-  const q = searchEl.value.trim().toLowerCase();
-  const msgs = await idbGetAllMessages();
-  logEl.innerHTML = '';
-  msgs.filter(m => !q || m.txt.toLowerCase().includes(q)).sort((a,b)=>a.ts - b.ts).forEach(renderMessageFromStorage);
+// Clear session
+clearSessionBtn.addEventListener('click', () => {
+  deleteCookie(SESSION_COOKIE);
+  sessionStorage.removeItem('neon_session_secret_b64');
+  appendSystem('Session cleared. You will start fresh on reload.');
 });
-clearSearchBtn.addEventListener('click', async ()=>{ searchEl.value=''; const msgs = await idbGetAllMessages(); logEl.innerHTML=''; msgs.sort((a,b)=>a.ts-b.ts).forEach(renderMessageFromStorage); });
 
-/* ---- Initialization ---- */
-(async function init(){
-  msgLimitPill.textContent = `${MSG_LIMIT_BYTES/1024}KB`;
-  // try to open DB and load keys (non-blocking)
-  try { await idbOpen(); await loadKeyPairFromStorage(); } catch(e){ console.warn('idb/key init', e); }
-  updatePeerStatus();
-  roomLabel.textContent = roomEl.value;
-  // friendly brief help
-  setTimeout(()=>toast('Ready — click Join to begin (tracks via WebTorrent)'), 900);
-})();
+// Utility to announce peers list to new connections (optional)
+function announcePeerList(conn){
+  try {
+    const known = Object.keys(connections).slice(0,10);
+    conn.send({ type:'peerlist', peers: known.concat([myId]) });
+  } catch(e){}
+}
 
-/* ---- Utilities ---- */
-function setStatus(s){ logStatus(s); statusPre.textContent = s; }
-function updatePeerCountUI(){ peerCountEl.textContent = peerOpenCount(); }
+// When a new connection opens, announce peers
+function onConnectionOpen(conn){
+  try { announcePeerList(conn); } catch(e){}
+}
 
-/* ---- End of module ---- */
+// store last peers on unload
+window.addEventListener('beforeunload', ()=> {
+  try {
+    if(peer) peer.destroy();
+  } catch(e){}
+  const newList = [myId].concat(Object.keys(connections)).slice(0,12);
+  sessionStorage.setItem(lastPeersKey, JSON.stringify(newList));
+});
+
+// ---------- boot ----------
+window.addEventListener('load', async () => {
+  // preload cookie values into inputs (if cookie exists; may not verify here)
+  const cookie = getCookie(SESSION_COOKIE);
+  if(cookie){
+    try{
+      const [payloadB64] = cookie.split('.');
+      const payloadJson = atob(payloadB64.replace(/-/g,'+').replace(/_/g,'/'));
+      const payload = JSON.parse(payloadJson);
+      if(payload.username) nameInput.value = payload.username;
+      if(typeof payload.room !== 'undefined') groupInput.value = payload.room;
+    }catch(e){}
+  }
+  // start session or create new
+  await startFromSessionOrCreate();
+});
 </script>
 </body>
 </html>
