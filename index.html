@@ -1,461 +1,173 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Neon P2P Group Chat — Persistent Session</title>
-
-<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mini WhatsApp WebRTC</title>
 <style>
-  * { box-sizing: border-box; margin:0; padding:0; font-family:'VT323', monospace; }
-  body { background:#000; color:#00FF00; }
-  .container { display:flex; height:100vh; border:1px solid #00FF00; }
-  .sidebar { width:25%; border-right:1px solid #00FF00; background:#000; display:flex; flex-direction:column; }
-  .account { padding:16px; border-bottom:1px solid #00FF00; }
-  .account h1 { color:#00FF00; font-size:20px; }
-  .account p { color:#00FF00; font-size:13px; margin-top:6px; word-break:break-all; }
-  .search { padding:12px; border-bottom:1px solid #00FF00; }
-  .search input { width:100%; padding:8px; border:1px solid #00FF00; background:#000; color:#00FF00; font-size:14px; border-radius:6px; }
-  .hint { font-size:12px; color:rgba(0,255,0,0.6); margin-top:6px; }
-  .chat-list { overflow-y:auto; flex-grow:1; padding:6px; }
-  .chat-item { display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid rgba(0,255,0,0.04); cursor:pointer; }
-  .chat-item:hover { background:rgba(0,255,0,0.03); }
-  .chat-area { flex:1; display:flex; flex-direction:column; background:#000; }
-  .chat-header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid #00FF00; }
-  .chat-header .info .name { font-size:20px; color:#00FF00; }
-  .chat-body { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:12px; }
-  .message { display:flex; gap:12px; align-items:flex-end; max-width:80%; }
-  .message.you { margin-left:auto; justify-content:flex-end; }
-  .avatar { width:36px; text-align:center; font-size:14px; color:#00FF00; }
-  .bubble { border:1px solid #00FF00; padding:8px 10px; background:transparent; color:#00FF00; font-size:15px; border-radius:8px; word-break:break-word; }
-  .message.you .bubble { background:rgba(0,255,0,0.08); }
-  .timestamp { font-size:11px; color:rgba(0,255,0,0.6); margin-top:6px; }
-  .chat-footer { border-top:1px solid #00FF00; padding:10px 12px; display:flex; align-items:center; gap:8px; }
-  .chat-footer input { flex:1; background:#000; border:1px solid #00FF00; color:#00FF00; font-size:15px; padding:8px; border-radius:6px; }
-  .chat-footer button { background:#00FF00; border:1px solid #00FF00; color:#000; padding:8px 12px; cursor:pointer; border-radius:6px; }
-  .small { font-size:12px; color:rgba(0,255,0,0.7); }
-  @media (max-width:800px){ .sidebar{ display:none; } .container{ flex-direction:column;} .chat-body{padding-bottom:120px;} .chat-footer{position:fixed;left:0;right:0;bottom:0;background:#000;} }
+  body,html { margin:0; padding:0; font-family: Arial,sans-serif; height:100vh; display:flex; flex-direction:column; }
+  #loginScreen, #chatScreen { flex:1; display:none; flex-direction: column; }
+  #loginScreen.active, #chatScreen.active { display:flex; }
+  #loginScreen { justify-content:center; align-items:center; }
+  #loginBox { border:1px solid #ccc; padding:20px; border-radius:8px; width: 280px; text-align:center; }
+  #loginBox input { width: 100%; padding:8px; margin:8px 0; font-size: 16px; }
+  #loginBox button { width: 100%; padding:8px; background:#25d366; border:none; color:white; font-weight: bold; cursor:pointer; border-radius: 4px; }
+  #loginBox button:hover { background:#1ebe57; }
+  
+  #chatScreen { flex:1; }
+  #header { background:#075e54; color:#fff; padding: 12px 16px; font-weight: bold; display:flex; justify-content:space-between; align-items:center; }
+  #header #peerLabel { font-size: 14px; }
+  #chatArea { flex:1; overflow-y:auto; padding:10px; background:#ece5dd; display:flex; flex-direction: column; }
+  .message { margin:5px 0; max-width: 70%; padding:8px 12px; border-radius: 10px; word-break: break-word; }
+  .message.sent { background:#dcf8c6; align-self:flex-end; }
+  .message.received { background:#fff; align-self:flex-start; }
+  #inputArea { display:flex; padding: 10px; background:#f0f0f0; }
+  #inputArea input { flex:1; padding:10px; font-size:16px; border-radius:20px; border:1px solid #ccc; outline:none; }
+  #inputArea button { margin-left:8px; padding:0 20px; font-weight:bold; background:#25d366; border:none; border-radius:20px; color:#fff; cursor:pointer; }
+  #inputArea button:disabled { background:#9ed49e; cursor:not-allowed; }
+  #exploreBtn { margin-left: 16px; background:#128c7e; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; color:#fff; font-size: 14px; }
+  #exploreBtn:hover { background:#075e54; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <aside class="sidebar" aria-label="sidebar">
-      <div class="account">
-        <h1>NEON P2P</h1>
-        <p id="meLabel">Not connected</p>
-        <div class="small">Room: <span id="roomLabel">Global</span></div>
-      </div>
 
-      <div class="search">
-        <input id="groupInput" placeholder="Group name (leave empty = global)" />
-        <div class="hint">Type a group name then Save Session to persist across reloads.</div>
-      </div>
-
-      <div class="search" style="border-top:0;">
-        <input id="nameInput" placeholder="Display name (optional)" />
-        <div style="margin-top:8px; display:flex; gap:8px;">
-          <button id="saveSessionBtn">Save Session</button>
-          <button id="clearSessionBtn">Clear Session</button>
-        </div>
-      </div>
-
-      <div class="chat-list" id="memberList" aria-label="members"></div>
-    </aside>
-
-    <main class="chat-area" aria-live="polite">
-      <header class="chat-header">
-        <div class="info"><div class="name">🌐 <span id="roomName">Global</span></div></div>
-        <div class="small">Your ID: <span id="myId">...</span></div>
-      </header>
-
-      <section class="chat-body" id="chatBody" role="log"></section>
-
-      <footer class="chat-footer">
-        <input id="msgInput" placeholder="Type a message..." autocomplete="off" />
-        <button id="sendBtn" disabled>Send</button>
-      </footer>
-    </main>
+<!-- Login screen -->
+<div id="loginScreen" class="active">
+  <div id="loginBox">
+    <h2>Login</h2>
+    <input id="usernameInput" placeholder="Your username" />
+    <input id="peerUsernameInput" placeholder="Peer username" />
+    <button id="loginBtn">Start Chat</button>
   </div>
+</div>
 
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script>
+<!-- Chat screen -->
+<div id="chatScreen">
+  <div id="header">
+    <div>Chat with: <span id="peerLabel"></span></div>
+    <button id="exploreBtn">Explore My Websites</button>
+  </div>
+  <div id="chatArea"></div>
+  <div id="inputArea">
+    <input id="messageInput" placeholder="Type a message..." autocomplete="off" />
+    <button id="sendBtn" disabled>Send</button>
+  </div>
+</div>
+
 <script>
-/*
-  Neon P2P Group Chat (mesh) with persistent signed session cookie.
-  - Cookie stores signed payload: { sessionId, username, room, iat }
-  - HMAC key stored in sessionStorage so only this tab can verify cookie.
-  - Session lets user get deterministic peerId so reload auto-rejoins.
-  - Mesh: each peer connects to known peers and relays join + message events.
-*/
+  let peer;
+  let conn;
+  let username = '';
+  let peerUsername = '';
 
-// --------- Config ----------
-const SESSION_COOKIE = 'neon_p2p_session';
-const COOKIE_EXP_SECONDS = 60 * 60; // 1 hour
-const peerJsHost = '0.peerjs.com';
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'turn:numb.viagenie.ca', username: 'webrtc@live.com', credential: 'muazkh' }
-];
+  const loginScreen = document.getElementById('loginScreen');
+  const chatScreen = document.getElementById('chatScreen');
+  const usernameInput = document.getElementById('usernameInput');
+  const peerUsernameInput = document.getElementById('peerUsernameInput');
+  const loginBtn = document.getElementById('loginBtn');
+  const peerLabel = document.getElementById('peerLabel');
+  const chatArea = document.getElementById('chatArea');
+  const messageInput = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const exploreBtn = document.getElementById('exploreBtn');
 
-// --------- UI refs ----------
-const meLabel = document.getElementById('meLabel');
-const myIdEl = document.getElementById('myId');
-const roomNameEl = document.getElementById('roomName');
-const roomLabel = document.getElementById('roomLabel');
-const memberList = document.getElementById('memberList');
-const chatBody = document.getElementById('chatBody');
-const msgInput = document.getElementById('msgInput');
-const sendBtn = document.getElementById('sendBtn');
-const groupInput = document.getElementById('groupInput');
-const nameInput = document.getElementById('nameInput');
-const saveSessionBtn = document.getElementById('saveSessionBtn');
-const clearSessionBtn = document.getElementById('clearSessionBtn');
-
-// --------- State ----------
-let peer = null;
-let myId = '';
-let username = '';
-let roomName = '';
-let connections = {}; // peerId -> DataConnection
-let members = new Set();
-let lastPeersKey = 'neon_last_peers';
-
-// ---------- small helpers ----------
-function nowTime(){ return new Date().toLocaleTimeString(); }
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
-
-// ---------- cookie & HMAC utilities ----------
-function setCookie(name, value, maxAgeSeconds){
-  const secureFlag = location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = `${name}=${encodeURIComponent(value)}; max-age=${maxAgeSeconds}; path=/; SameSite=Lax${secureFlag}`;
-}
-function getCookie(name){
-  const cookies = document.cookie ? document.cookie.split('; ') : [];
-  for(const c of cookies){ const [k,v] = c.split('='); if(k===name) return decodeURIComponent(v); }
-  return null;
-}
-function deleteCookie(name){ document.cookie = `${name}=; max-age=0; path=/; SameSite=Lax`; }
-
-function b64uEncode(bytes){
-  return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-}
-function b64uDecodeToUint8Array(str){
-  str = str.replace(/-/g,'+').replace(/_/g,'/');
-  while(str.length % 4) str += '=';
-  const bin = atob(str);
-  const arr = new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
-  return arr;
-}
-
-function randomBytes(n){ const a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
-async function importHmacKey(raw){ return crypto.subtle.importKey('raw', raw, { name:'HMAC', hash:'SHA-256' }, false, ['sign','verify']); }
-async function hmacSignBase64url(hmacKey, payloadUint8){
-  const sig = await crypto.subtle.sign('HMAC', hmacKey, payloadUint8);
-  return b64uEncode(sig);
-}
-async function hmacVerify(hmacKey, payloadUint8, sigB64u){
-  const sigBytes = b64uDecodeToUint8Array(sigB64u);
-  return crypto.subtle.verify('HMAC', hmacKey, sigBytes, payloadUint8);
-}
-
-// ---------- session token ----------
-async function createAndStoreSession(u, room){
-  const rawSecret = randomBytes(32);
-  sessionStorage.setItem('neon_session_secret_b64', b64uEncode(rawSecret));
-  const sessionId = (Math.random().toString(36).slice(2,10));
-  const payload = { sessionId, username: u, room: room, iat: Math.floor(Date.now()/1000) };
-  const payloadJson = JSON.stringify(payload);
-  const payloadBytes = new TextEncoder().encode(payloadJson);
-  const hmacKey = await importHmacKey(rawSecret);
-  const sig = await hmacSignBase64url(hmacKey, payloadBytes);
-  const cookieVal = `${b64uEncode(payloadBytes)}.${sig}`;
-  setCookie(SESSION_COOKIE, cookieVal, COOKIE_EXP_SECONDS);
-  return payload;
-}
-
-async function verifySessionFromCookie(){
-  const cookie = getCookie(SESSION_COOKIE);
-  if(!cookie) return null;
-  const parts = cookie.split('.');
-  if(parts.length !== 2) return null;
-  const [payloadB64, sigB64] = parts;
-  let payloadBytes;
-  try { payloadBytes = b64uDecodeToUint8Array(payloadB64); } catch(e){ return null; }
-  let payload;
-  try { payload = JSON.parse(new TextDecoder().decode(payloadBytes)); } catch(e){ return null; }
-  const now = Math.floor(Date.now()/1000);
-  if(!payload.iat || (payload.iat + COOKIE_EXP_SECONDS) < now){ deleteCookie(SESSION_COOKIE); return null; }
-  const rawSecretB64 = sessionStorage.getItem('neon_session_secret_b64');
-  if(!rawSecretB64) return null;
-  const rawSecret = b64uDecodeToUint8Array(rawSecretB64);
-  const hmacKey = await importHmacKey(rawSecret);
-  const verified = await hmacVerify(hmacKey, payloadBytes, sigB64);
-  if(!verified){ deleteCookie(SESSION_COOKIE); return null; }
-  return payload;
-}
-
-// ---------- Peer startup & mesh logic ----------
-function buildPeerId(sessionId, username, room){
-  // deterministic id per session so reload reuses same id and peers can reconnect automatically
-  const cleanUser = (username || 'anon').replace(/\s+/g,'').slice(0,16) || 'anon';
-  const cleanRoom = (room || 'global').replace(/\s+/g,'').slice(0,20);
-  return `${cleanRoom}-${cleanUser}-${sessionId}`;
-}
-
-async function startFromSessionOrCreate(){
-  // try verify cookie
-  const verified = await verifySessionFromCookie();
-  if(verified){
-    username = verified.username || `anon${Math.floor(Math.random()*1000)}`;
-    roomName = verified.room || '';
-    nameInput.value = username;
-    groupInput.value = roomName;
-    roomNameEl.textContent = roomName || 'Global';
-    await startPeerUsingSession(verified.sessionId);
-    return;
+  function addMessage(text, sent) {
+    const div = document.createElement('div');
+    div.className = 'message ' + (sent ? 'sent' : 'received');
+    div.textContent = text;
+    chatArea.appendChild(div);
+    chatArea.scrollTop = chatArea.scrollHeight;
   }
-  // no valid cookie -> create
-  username = (nameInput.value || `anon${Math.floor(Math.random()*1000)}`).trim();
-  roomName = (groupInput.value || '').trim();
-  const payload = await createAndStoreSession(username, roomName);
-  nameInput.value = username;
-  groupInput.value = roomName;
-  roomNameEl.textContent = roomName || 'Global';
-  await startPeerUsingSession(payload.sessionId);
-}
 
-function startPeerUsingSession(sessionId){
-  return new Promise((resolve) => {
-    const peerId = buildPeerId(sessionId, username, roomName);
-    myId = peerId;
-    meLabel.textContent = `${username} (${myId})`;
-    myIdEl.textContent = myId;
+  loginBtn.onclick = () => {
+    username = usernameInput.value.trim();
+    peerUsername = peerUsernameInput.value.trim();
+    if (!username) {
+      alert('Enter your username');
+      return;
+    }
+    if (!peerUsername) {
+      alert('Enter peer username');
+      return;
+    }
 
-    peer = new Peer(myId, {
-      host: peerJsHost,
-      secure: true,
-      port: 443,
-      path: '/',
-      config: { iceServers: ICE_SERVERS }
+    peer = new Peer(username, {
+      debug: 2,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'turn:numb.viagenie.ca', credential: 'muazkh', username: 'webrtc@live.com' }
+        ]
+      }
     });
 
-    peer.on('open', id => {
-      myIdEl.textContent = id;
-      appendSystem(`Connected as ${id}`);
+    peer.on('open', () => {
+      loginScreen.classList.remove('active');
+      chatScreen.classList.add('active');
+      peerLabel.textContent = peerUsername;
       sendBtn.disabled = false;
-      // bootstrap last peers
-      const last = JSON.parse(sessionStorage.getItem(lastPeersKey) || '[]');
-      for(const p of last){
-        if(p && p !== myId && !connections[p]){
-          const c = peer.connect(p);
-          c.on('open', ()=> setupConnection(c));
-          c.on('error', ()=>{});
-        }
+    });
+
+    peer.on('connection', c => {
+      if (conn && conn.open) {
+        c.close(); // only allow one connection
+        return;
       }
-      // add self to last peers
-      const newList = [myId].concat(last.filter(x=>x!==myId)).slice(0,12);
-      sessionStorage.setItem(lastPeersKey, JSON.stringify(newList));
-      resolve();
+      conn = c;
+      setupConnection();
     });
 
-    peer.on('connection', conn => {
-      // accept inbound connections
-      setupConnection(conn);
+    // connect to peer after peer opens
+    peer.on('open', () => {
+      if (!conn) {
+        conn = peer.connect(peerUsername);
+        setupConnection();
+      }
+    });
+  };
+
+  function setupConnection() {
+    conn.on('open', () => {
+      addMessage(`Connected to ${peerUsername}`, false);
     });
 
-    peer.on('disconnected', () => appendSystem('Peer disconnected — trying to reconnect...'));
-    peer.on('error', err => appendSystem('Peer error: ' + (err && err.type ? err.type : err)));
-  });
-}
+    conn.on('data', data => {
+      addMessage(data, false);
+    });
 
-function setupConnection(conn){
-  if(connections[conn.peer]) {
-    // if already connected, close duplicate
-    try{ conn.close(); }catch(e){}
-    return;
+    conn.on('close', () => {
+      addMessage('Connection closed', false);
+      conn = null;
+      sendBtn.disabled = true;
+    });
+
+    conn.on('error', err => {
+      console.error(err);
+      alert('Connection error: ' + err);
+    });
   }
-  connections[conn.peer] = conn;
-  members.add(conn.peer);
-  rebuildMemberList();
-  appendSystem(`${conn.peer} connected`);
-  // send join message so remote can connect to others
-  setTimeout(()=> {
-    try { conn.send({ type:'join', id: myId }); } catch(e){}
-  }, 200);
 
-  conn.on('data', data => {
-    try {
-      if(typeof data === 'object' && data.type){
-        handleSignal(data, conn.peer);
-      } else if (typeof data === 'string') {
-        appendMessage(conn.peer, data, false);
-        // broadcast to others to keep mesh (optional propagation)
-        relayToOthers({ type:'message', from: conn.peer, text: data }, conn.peer);
-      }
-    } catch(e){}
-  });
-
-  conn.on('close', ()=> {
-    delete connections[conn.peer];
-    members.delete(conn.peer);
-    rebuildMemberList();
-    appendSystem(`${conn.peer} disconnected`);
-  });
-
-  conn.on('error', ()=>{});
-}
-
-// handle control signals: join/message/peerlist
-function handleSignal(obj, fromPeer){
-  if(obj.type === 'join'){
-    // connect back if not already connected
-    if(obj.id && obj.id !== myId && !connections[obj.id]){
-      const c = peer.connect(obj.id);
-      c.on('open', ()=> setupConnection(c));
-      c.on('error', ()=>{});
+  sendBtn.onclick = () => {
+    let msg = messageInput.value.trim();
+    if (!msg) return;
+    if (!conn || !conn.open) {
+      alert('Not connected to peer');
+      return;
     }
-  } else if (obj.type === 'peerlist'){
-    // attempt to connect to listed peers
-    (obj.peers || []).forEach(p => {
-      if(p && p !== myId && !connections[p]){
-        const c = peer.connect(p);
-        c.on('open', ()=> setupConnection(c));
-        c.on('error', ()=>{});
-      }
-    });
-  } else if (obj.type === 'message'){
-    appendMessage(obj.from || fromPeer, obj.text, false);
-    // relay further (controlled)
-    relayToOthers(obj, fromPeer);
-  }
-}
+    conn.send(msg);
+    addMessage(msg, true);
+    messageInput.value = '';
+  };
 
-function relayToOthers(obj, exceptPeer){
-  // small TTL-less relay to propagate message across mesh; avoid sending back to origin
-  for(const id in connections){
-    if(id === exceptPeer) continue;
-    const c = connections[id];
-    if(c && c.open){
-      try { c.send(obj); } catch(e){}
-    }
-  }
-}
-
-// ---------- UI + actions ----------
-function appendMessage(from, text, fromMe){
-  const wrap = document.createElement('div');
-  wrap.className = 'message' + (fromMe ? ' you' : '');
-  const avatar = document.createElement('div');
-  avatar.className = 'avatar';
-  avatar.textContent = fromMe ? 'You' : (from ? from.split('-').slice(-1)[0] : 'Peer');
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble';
-  bubble.innerHTML = `<div>${escapeHtml(text)}</div><div class="timestamp">${nowTime()}</div>`;
-  if(fromMe){
-    wrap.appendChild(bubble);
-    wrap.appendChild(avatar);
-  } else {
-    wrap.appendChild(avatar);
-    wrap.appendChild(bubble);
-  }
-  chatBody.appendChild(wrap);
-  chatBody.scrollTop = chatBody.scrollHeight;
-}
-
-function appendSystem(text){
-  const div = document.createElement('div');
-  div.className = 'small';
-  div.style.textAlign = 'center';
-  div.style.margin = '8px 0';
-  div.textContent = `${text} (${nowTime()})`;
-  chatBody.appendChild(div);
-  chatBody.scrollTop = chatBody.scrollHeight;
-}
-
-function rebuildMemberList(){
-  memberList.innerHTML = '';
-  const arr = Array.from(members).sort();
-  arr.forEach(id => {
-    const el = document.createElement('div');
-    el.className = 'chat-item';
-    el.innerHTML = `<div><div class="small">${escapeHtml(id.split('-').slice(-2)[0])}</div><div class="small" style="opacity:0.7">${escapeHtml(id)}</div></div>
-                    <div class="small">${connections[id] && connections[id].open ? 'online' : 'offline'}</div>`;
-    memberList.appendChild(el);
+  messageInput.addEventListener('keypress', e => {
+    if (e.key === 'Enter') sendBtn.click();
   });
-}
 
-// send message to all connections and locally
-sendBtn.addEventListener('click', async () => {
-  const t = msgInput.value.trim();
-  if(!t) return;
-  appendMessage('You', t, true);
-  // broadcast structured message
-  const obj = { type:'message', from: myId, text: t };
-  for(const id in connections){
-    const c = connections[id];
-    if(c && c.open) try { c.send(obj); } catch(e){}
-  }
-  msgInput.value = '';
-});
-msgInput.addEventListener('keypress', e => { if(e.key === 'Enter'){ e.preventDefault(); sendBtn.click(); } });
-
-// Save session button — creates/updates signed cookie so reload restores session
-saveSessionBtn.addEventListener('click', async () => {
-  username = (nameInput.value || username || `anon${Math.floor(Math.random()*1000)}`).trim();
-  roomName = (groupInput.value || roomName || '').trim();
-  const payload = await createAndStoreSession(username, roomName);
-  roomNameEl.textContent = payload.room || 'Global';
-  appendSystem('Session saved. You will auto-rejoin after reload.');
-});
-
-// Clear session
-clearSessionBtn.addEventListener('click', () => {
-  deleteCookie(SESSION_COOKIE);
-  sessionStorage.removeItem('neon_session_secret_b64');
-  appendSystem('Session cleared. You will start fresh on reload.');
-});
-
-// Utility to announce peers list to new connections (optional)
-function announcePeerList(conn){
-  try {
-    const known = Object.keys(connections).slice(0,10);
-    conn.send({ type:'peerlist', peers: known.concat([myId]) });
-  } catch(e){}
-}
-
-// When a new connection opens, announce peers
-function onConnectionOpen(conn){
-  try { announcePeerList(conn); } catch(e){}
-}
-
-// store last peers on unload
-window.addEventListener('beforeunload', ()=> {
-  try {
-    if(peer) peer.destroy();
-  } catch(e){}
-  const newList = [myId].concat(Object.keys(connections)).slice(0,12);
-  sessionStorage.setItem(lastPeersKey, JSON.stringify(newList));
-});
-
-// ---------- boot ----------
-window.addEventListener('load', async () => {
-  // preload cookie values into inputs (if cookie exists; may not verify here)
-  const cookie = getCookie(SESSION_COOKIE);
-  if(cookie){
-    try{
-      const [payloadB64] = cookie.split('.');
-      const payloadJson = atob(payloadB64.replace(/-/g,'+').replace(/_/g,'/'));
-      const payload = JSON.parse(payloadJson);
-      if(payload.username) nameInput.value = payload.username;
-      if(typeof payload.room !== 'undefined') groupInput.value = payload.room;
-    }catch(e){}
-  }
-  // start session or create new
-  await startFromSessionOrCreate();
-});
+  exploreBtn.onclick = () => {
+    window.open('https://appmakervishal.github.io/showcase/', '_blank');
+  };
 </script>
+
 </body>
 </html>
